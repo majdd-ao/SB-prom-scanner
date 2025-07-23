@@ -1,0 +1,135 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SB Prom Scanner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    video {
+      width: 90%;
+      max-width: 600px;
+      margin-top: 20px;
+      border: 2px solid #555;
+      border-radius: 10px;
+    }
+    input[type="text"] {
+      margin-top: 20px;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 5px;
+      border: none;
+      width: 250px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #download, #reset {
+      margin-top: 10px;
+      background-color: #444;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>SB Prom Scanner</h1>
+  <video id="preview" autoplay></video>
+  <input type="text" id="manualInput" placeholder="Enter Ticket Code" />
+  <button onclick="checkTicket(document.getElementById('manualInput').value)">Check In</button>
+  <div id="status"></div>
+  <button id="download">Download Check-Ins</button>
+  <button id="reset">Reset Check-Ins</button>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <script>
+    const validTickets = Array.from({length: 200}, (_, i) => (2025001 + i).toString());
+    let checkedIn = JSON.parse(localStorage.getItem("checkedIn") || "[]");function updateStatus(message, color) {
+  const status = document.getElementById("status");
+  status.textContent = message;
+  status.style.color = color;
+}
+
+function checkTicket(code) {
+  code = code.trim();
+  if (!code) return;
+  const timestamp = new Date().toISOString();
+  if (validTickets.includes(code)) {
+    if (!checkedIn.find(entry => entry.code === code)) {
+      checkedIn.push({ code, timestamp });
+      localStorage.setItem("checkedIn", JSON.stringify(checkedIn));
+      updateStatus(`Checked in: ${code}`, "lightgreen");
+    } else {
+      updateStatus(`Already checked in: ${code}`, "orange");
+    }
+  } else {
+    updateStatus("Invalid Ticket", "red");
+    console.warn("Rejected code:", code);
+  }
+}
+
+document.getElementById("download").onclick = () => {
+  const blob = new Blob([
+    "Ticket Code,Timestamp\n" +
+      checkedIn.map(entry => `${entry.code},${entry.timestamp}`).join("\n")
+  ], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "checkins.csv";
+  a.click();
+};
+
+document.getElementById("reset").onclick = () => {
+  if (confirm("Are you sure you want to reset all check-ins?")) {
+    checkedIn = [];
+    localStorage.removeItem("checkedIn");
+    updateStatus("Check-ins reset.", "#f0f0f0");
+  }
+};
+
+const selectedDeviceId = null;
+const codeReader = new ZXing.BrowserMultiFormatReader();
+
+function startScanner() {
+  codeReader
+    .listVideoInputDevices()
+    .then(videoInputDevices => {
+      const preferred = videoInputDevices.find(device => device.label.toLowerCase().includes("back")) || videoInputDevices[0];
+      return codeReader.decodeFromVideoDevice(preferred.deviceId, "preview", (result, err) => {
+        if (result) {
+          checkTicket(result.getText());
+        }
+      });
+    })
+    .catch(err => {
+      console.error("Camera error:", err);
+      updateStatus("Camera failed to start. Check permissions.", "red");
+    });
+}
+
+startScanner();
+
+  </script>
+</body>
+</html>
